@@ -4,6 +4,7 @@ const app = express();
 require('dotenv').config()
 var jwt = require('jsonwebtoken');
 const cors = require('cors');
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000;
 
 //middle wares
@@ -47,6 +48,7 @@ async function run() {
         const menuCollection = client.db("bistrodb").collection("menu");
         const reviewCollection = client.db("bistrodb").collection("reviews");
         const cartCollection = client.db("bistrodb").collection("carts");
+        const paymentCollection = client.db("bistrodb").collection("payments");
 
         app.post('/jwt', (req, res) => {
             const user = req.body
@@ -143,6 +145,29 @@ async function run() {
             res.send(result);
         })
 
+        app.post("/create-payment-intent", verifyJwt, async (req, res) => {
+            const { price } = req.body;
+            const amount = price * 100;
+            console.log(price, amount)
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: "usd",
+                payment_method_types: ["card"],
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret,
+            });
+        });
+
+        app.post('/payments', verifyJwt, async (req, res) => {
+            const payment = req.body;
+            const InsertResult = await paymentCollection.insertOne(payment);
+            const query = { _id: { $in: payment.CartItems.map(id => new ObjectId(id)) } }
+            const deleteResult = await cartCollection.deleteMany(query);
+            res.send({ InsertResult, deleteResult });
+        })
+
         app.get('/menu', async (req, res) => {
             const result = await menuCollection.find().toArray();
             res.send(result);
@@ -154,9 +179,9 @@ async function run() {
             res.send(result);
         })
 
-        app.delete('/menu/:id',verifyJwt, verifyAdmin, async(req, res)=>{
+        app.delete('/menu/:id', verifyJwt, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const query = {_id: new ObjectId(id)};
+            const query = { _id: new ObjectId(id) };
             const result = await menuCollection.deleteOne(query);
             res.send(result);
         })
