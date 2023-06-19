@@ -168,6 +168,20 @@ async function run() {
             res.send({ InsertResult, deleteResult });
         })
 
+        app.get('/admin-stats', async (req, res) => {
+            const users = await usersCollection.estimatedDocumentCount();
+            const products = await menuCollection.estimatedDocumentCount();
+            const orders = await paymentCollection.estimatedDocumentCount();
+            const payment = await paymentCollection.find().toArray();
+            const revenue = payment.reduce((sum, item)=> sum + item.price, 0);
+            res.send({
+                users,
+                products,
+                orders,
+                revenue
+            })
+        })
+
         app.get('/menu', async (req, res) => {
             const result = await menuCollection.find().toArray();
             res.send(result);
